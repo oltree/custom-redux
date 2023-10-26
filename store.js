@@ -1,5 +1,5 @@
 const createStore = (reducer) => {
-  let state = reducer({}, { type: '__INIT__' });
+  let state = reducer(undefined, { type: '__INIT__' });
   let subscribers = [];
 
   return {
@@ -79,7 +79,7 @@ const combineReducers = (reducersMap) => {
     const nextState = {};
 
     Object.entries(reducersMap).forEach(([key, reducer]) => {
-      nextState[key] = reducer(state[key], action);
+      nextState[key] = reducer(state ? state[key] : state, action);
     });
 
     return nextState;
@@ -91,14 +91,82 @@ const rootReducer = combineReducers({
   userState: userReducer,
 });
 
-const store = createStore(rootReducer);
+// const store = createStore(rootReducer);
 
-console.log(store.getState());
+// console.log(store.getState());
 
 // store.subscribe(() => console.log('change'));
 
-store.dispatch({ type: 'DECREMENT', payload: 3 });
-store.dispatch(increment(5));
-store.dispatch({ type: 'SUCCESS', payload: { name: 'user' } });
+// store.dispatch({ type: 'DECREMENT', payload: 3 });
+// store.dispatch(increment(5));
+// store.dispatch({ type: 'SUCCESS', payload: { name: 'user' } });
 
-console.log(store.getState());
+// console.log(store.getState());
+
+const thunk = (store) => (dispatch) => (action) => {
+  if (typeof action === 'function') {
+    return action(store.dispatch, store.getState);
+  }
+
+  return dispatch(action);
+};
+
+const applyMiddleware = (middleware) => {
+  return (createStore) => {
+    return (reducer) => {
+      const store = createStore(reducer);
+
+      return {
+        dispatch: (action) => middleware(store)(store.dispatch)(action),
+        getState: store.getState,
+      };
+    };
+  };
+};
+
+const loadingInitialState = {
+  isLoading: false,
+};
+
+const loadingReducer = (state = loadingInitialState, action) => {
+  switch (action.type) {
+    case 'STARTED':
+      return {
+        ...state,
+        isLoading: true,
+      };
+    case 'SUCCESS':
+      return {
+        ...state,
+        isLoading: false,
+      };
+    default: {
+      return {
+        ...state,
+      };
+    }
+  }
+};
+
+const someAction = () => {
+  return async (dispatch, getState) => {
+    dispatch({ type: 'STARTED' });
+
+    await new Promise((resolve) => setTimeout(() => resolve(), 3000));
+
+    dispatch({ type: 'SUCCESS' });
+  };
+};
+
+const createStoreWithMiddleware = applyMiddleware(thunk)(createStore);
+const storeWithMiddleware = createStoreWithMiddleware(loadingReducer);
+
+console.log(storeWithMiddleware.getState());
+
+storeWithMiddleware.dispatch(someAction());
+
+console.log(storeWithMiddleware.getState());
+
+setTimeout(() => {
+  console.log(storeWithMiddleware.getState());
+}, 5000);
